@@ -1,0 +1,39 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "rec",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "command": "npm run start:debug",
+
+        },
+        {
+            "name": "rec",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "npm run start:debug",
+            "env": {
+                "NODE_ENV": "development",
+                "MODULE_NAME": "MomentumTraderModule",
+                "PORT": "3001",
+                "TRADER_NAME": "binance_momentum_24H",
+            }
+        },{
+        "name": "Launch via NPM",
+        "type": "node",
+        "request": "launch",
+        "cwd": "${workspaceRoot}/nest-tutorial",
+        "runtimeExecutable": "npm",
+        "runtimeArgs": [
+            "run-script", "start:debug"
+        ],
+    }
+    ]
+}
