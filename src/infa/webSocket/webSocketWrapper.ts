@@ -95,7 +95,7 @@ export class WebSocketWrapper {
             self.lastMessageTime = new Date();
             self.messagesCount++;
             self.notifications.onSocketMessage(self, message);
-         });
+        });
 
         this.websocket.on("open", (connection) => {
             self.messagesCount = 0;

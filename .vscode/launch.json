@@ -12,6 +12,9 @@
                 "<node_internals>/**"
             ],
             "command": "npm run start:debug",
+            "env": {
+                "OCI_CONFIG_FILE": ".oci/config"
+            }
 
         },
         {

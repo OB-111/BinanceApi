@@ -1,84 +1,116 @@
 import { Injectable } from '@nestjs/common';
+import { OracleStorageService } from './infa/cloudUploader/oracleStorageService';
+import { CandlesWriter } from './infa/dataWriter/candlesWriter';
+import { Utils } from './infa/webSocket/utils';
 import { ISocketCloseError, IWebsocketServerNotifications } from './infa/webSocket/webSocketInterface';
 import { WebSocketWrapper } from './infa/webSocket/webSocketWrapper';
-const fs = require('fs');
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-const records = [];
-let counter = 0;
-let currentDate = new Date();
-const CHUNK_SIZE = 10;
-
+const moment = require("moment");
 
 export interface ICandleMessage {
-  startTimeAsDate: Date;
-  closeTimeAsDate: Date;
+  startTimeAsDate: number;
+  closeTimeAsDate: number;
   openPrice: number;
   closePrice: number;
   highPrice: number;
   lowPrice: number;
   volume: number;
-}
+  symbol: string;
+};
 
 export interface IDataUploader {
   uploadCandle(mesasge: ICandleMessage);
 }
 
 export class DataUploader implements IDataUploader {
-  // 1. Create file handle and save data for each day
-  private handleFile() {
-    const csvWriter = createCsvWriter({
-      path: `${currentDate}.csv`,
-      header: [
-        { id: 'startTimeAsDate', title: 'startTimeAsDate'.toUpperCase() },
-        { id: 'closeTimeAsDate', title: 'closeTimeAsDate'.toUpperCase() },
-        { id: 'openPrice', title: 'openPrice'.toUpperCase() },
-        { id: 'closePrice', title: 'closePrice'.toUpperCase() },
-        { id: 'volume', title: 'volume'.toUpperCase() },
-        { id: 'highPrice', title: 'highPrice'.toUpperCase() },
-        { id: 'lowPrice', title: 'lowPrice'.toUpperCase() },
-      ]
-    });
-    csvWriter.writeRecords(records)       // returns a promise
-      .then(() => {
-        console.log('...Done');
-      });
+  private candlesWriter: CandlesWriter;
+  private currentFileDate: Date = undefined;
+  private ociClient: OracleStorageService;
+  private csvFilesPath = "/Users/omribitan/Desktop/JobInterviews/nestJs/nest-Tutorial/toUpload/CSV_files";
+  private currentcsvFile: string = undefined;
+  private messages: ICandleMessage[] = [];
+  private counter : number = 0;
+  private fileCounter : number = 0;
 
+  public init() {
+    this.candlesWriter = new CandlesWriter();
+     this.ociClient = new OracleStorageService(
+       "nrvobnkc5mtf",
+       "bucket-candles",
+       "/Users/omribitan/Desktop/JobInterviews/nestJs/nest-Tutorial/toUpload/uploadManager");
+
+    this.messsageHandlingLoop();
   }
-  // 2. updload files to cloud
-  // 3. Delete uploaded files ONLY AFTER SUCCESSFULL UPLOAD!!!
-  public uploadCandle(message: ICandleMessage) {
-    if (!message) return;
-    if (message.startTimeAsDate.getDate === currentDate.getDate) {
-      records.push(message);
-      counter++;
-      if (counter === CHUNK_SIZE) {
-        this.handleFile();
-        counter = 0;
-        currentDate = new Date();
-      }
-    } else {
-      this.handleFile();
-      //TODO : pick  all files for same day
-      //TODO : upload to cloud
 
+  public async uploadCandle(message: ICandleMessage): Promise<void> {
+    if (!message) return;
+    this.messages.push(message);
+  }
+
+  private async uploadCandlesFile(filePath: string) {
+    await this.ociClient.upload({
+      filePath: filePath,
+      successCallback: (fileName: string) => {
+        console.log(`File ${fileName} Uploaded successfully`);
+      }
+    });
+  }
+
+  private createCsvFilePath(): string {
+    return `${this.csvFilesPath}/${moment(this.currentFileDate).format("YYYY-MM-DD")}_${this.fileCounter}.csv`;
+  }
+
+  private async messsageHandlingLoop() {
+    while (true) {
+      // if no message arrived , sleep for sec
+      if (this.messages.length === 0) {
+        await Utils.wait(1000);
+        continue;
+      }
+
+      const messages = this.messages.splice(0);
+      for (let index = 0; index < messages.length; index++) {
+        const message = messages[index];
+        try {
+          if (!this.currentcsvFile) {
+            this.currentFileDate = new Date(message.startTimeAsDate);
+            this.currentcsvFile = this.createCsvFilePath();
+            this.candlesWriter.openFile(this.currentcsvFile);
+          }
+          // If the current message is from today lets update todays file
+          if (moment(message.startTimeAsDate).isSame(moment(this.currentFileDate), "hour") && (this.counter < 20)) {
+  
+              await this.candlesWriter.Write({ data: message });
+              this.counter++;
+            
+          } // upload current file and then create new file
+          else {
+            this.counter = 0;
+            await this.uploadCandlesFile(this.currentcsvFile);
+            this.currentcsvFile = undefined;
+            console.log("not the same Day");
+            this.fileCounter++;
+            
+          }
+        } catch (error) {
+          debugger; // Todo: add log
+        }
+      }
     }
   }
-
-  private uploadLoop() {
-    // Check if files exists
-    // If so, upload them
-    // else wait for a while (Sleep(1000))
-  }
-
 }
 
 @Injectable()
 export class BinanceRecorder implements IWebsocketServerNotifications {
   private webSocketWrapper: WebSocketWrapper;
   private dataUploader: DataUploader;
-  
+  private coins: string[] = [];
+
   constructor() {
-    this.dataUploader = new DataUploader();
+    this.dataUploader = new DataUploader();    
+  }
+
+  public start(coins: string[]) {
+    this.coins = coins;
     this.init();
   }
 
@@ -88,7 +120,8 @@ export class BinanceRecorder implements IWebsocketServerNotifications {
       "method": "SUBSCRIBE",
       "params":
         [
-          "btcbusd@kline_1m"
+          "btcbusd@kline_1m",
+          "bnbbusd@kline_1m"
         ],
       "id": 1
     };
@@ -102,13 +135,14 @@ export class BinanceRecorder implements IWebsocketServerNotifications {
   private handleCandlesMessage(message: any): ICandleMessage {
     if (!message?.k) return;
     const candleMessage: ICandleMessage = {
-      startTimeAsDate: new Date(message.k.t),
-      closeTimeAsDate: new Date(message.k.T),
+      startTimeAsDate: Number(message.k.t),
+      closeTimeAsDate: Number(message.k.T),
       openPrice: Number(message.k.o),
       closePrice: Number(message.k.c),
       volume: Number(message.k.v),
       highPrice: Number(message.k.h),
       lowPrice: Number(message.k.l),
+      symbol: message.s
     };
     return candleMessage;
 
@@ -143,6 +177,7 @@ export class BinanceRecorder implements IWebsocketServerNotifications {
 
   private init() {
     this.webSocketWrapper = new WebSocketWrapper('wss://fstream.binance.com/ws/', this);
+    this.dataUploader.init();
     this.webSocketWrapper.open();
   }
 }

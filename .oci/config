@@ -1,0 +1,6 @@
+[DEFAULT]
+user=ocid1.user.oc1..aaaaaaaaweoww7xmnxqekx4orjxhs5tlawiwnmjybmv6qvuqmfecqgsdl2yq
+fingerprint=2c:ea:59:5e:02:fe:2c:61:43:34:9a:96:92:be:2f:db
+tenancy=ocid1.tenancy.oc1..aaaaaaaahloxeuxhxoqib4euuuyl4fignqyif7reanfigqtiufbipd6wvuna
+region=ap-tokyo-1
+key_file=.oci/lcryptoomg@gmail.com_2022-12-12T10_17_32.608Z.pem
