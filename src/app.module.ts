@@ -9,5 +9,6 @@
   })
   export class AppModule {
     constructor(binanceRecorder : BinanceRecorder){
+      binanceRecorder.start(["btcbusd", "bnbbusd","ethbusd","ethusd", "ADABUSD"]);
     }
   }

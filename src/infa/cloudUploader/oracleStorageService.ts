@@ -2,7 +2,7 @@ import { IStorageEntity, IStorageServiceResult } from "./iStorageService";
 import { StorageService } from "./storageService";
 import common = require("oci-common");
 import { ObjectStorageClient, UploadManager } from "oci-objectstorage";
-import { readdir, unlinkSync, rename, existsSync } from "fs";
+import { readdir, unlinkSync, rename, existsSync, mkdirSync } from "fs";
 import { basename, join } from "path";
 import { Utils } from "../webSocket/utils";
 
@@ -10,6 +10,7 @@ export interface IOracleBucketStorageEntity extends IStorageEntity {
     filePath: string;
     successCallback?: any;
     overrideExistingFile?: boolean;
+    symbol?: string;
 }
 
 export interface IOracleStorageServiceResult extends IStorageServiceResult {
@@ -46,7 +47,11 @@ export class OracleStorageService extends StorageService {
 
         const path = require("path");
         const fileName = path.basename(entity.filePath);
-        const destinationPath = join(this.uploadPath, fileName);
+        const symbolPath = join(this.uploadPath, entity.symbol);
+        if (!existsSync(symbolPath)) {
+            mkdirSync(symbolPath, { recursive: true });
+          }
+        const destinationPath = join(symbolPath, fileName);
         if (entity.successCallback) {
             this.callbackMap.set(fileName, entity.successCallback);
         }
@@ -71,7 +76,7 @@ export class OracleStorageService extends StorageService {
     private async watchForFiles(path: string): Promise<void> {
         try {
             while (true) {
-                const files = await this.getDirectoryFiles(path);
+                const files = await this.getFiles(path);
                 if (files.length === 0) {
                     await Utils.wait(5000);
                     continue;
@@ -83,18 +88,19 @@ export class OracleStorageService extends StorageService {
                 files.forEach(async filename => {
                     const objectName = `${basename(filename)}`;
                     this.writeLog(`Uploading ${objectName} file...`);
+                    const parts = filename.split('/');
 
                     try {
                         promises.push({
                             fileName: filename,
-                            filePath: join(path, filename), // Save file for later deletion after successful upload
+                            filePath: filename, // Save file for later deletion after successful upload
                             // Save upload promise result for later wait for all
                             promise: this.uploadManager.upload({
-                                content: { filePath: join(path, filename) },
+                                content: { filePath: filename },
                                 requestDetails: {
                                     namespaceName: this.namespaceName,
                                     bucketName: this.bucketName,
-                                    objectName: objectName
+                                    objectName: join(parts[parts.length - 2], objectName)
                                 }
                             })
                         });
@@ -124,10 +130,25 @@ export class OracleStorageService extends StorageService {
             debugger
         }
     }
-
-    private getDirectoryFiles(path: string) {
+//  check if dir exist , if so append current file else create new dir and keep adding files
+    private getFiles(path: string): Promise<any[]> {
         return new Promise<string[]>(resolve => {
-            readdir(path, (err, files) => {
+            readdir(path, { withFileTypes: true }, async (err, dirs) => {
+                let files: any[] = [];
+                if(!dirs) {
+                    resolve(files);
+                    return;
+                } 
+
+                for (let index = 0; index < dirs.length; index++) {
+                    const dir = dirs[index];
+                    if(dir.isFile()) {
+                        files.push(join(path, dir.name));
+                    } else if (dir.isDirectory()) {
+                        files = files.concat(await this.getFiles(join(path, dir.name)));
+                    }
+                }
+                
                 resolve(!err ? files : []);
             });
         });

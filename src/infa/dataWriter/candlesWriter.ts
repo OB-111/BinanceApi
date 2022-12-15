@@ -27,6 +27,7 @@ export class CandlesWriter extends CSVWriter implements ICandlesWriter {
             { id: 'volume', title: 'Volume' },
             { id: 'highPrice', title: 'Highest Price' },
             { id: 'lowPrice', title: 'Lowest Price' },
+            { id: 'symbol', title: 'Symbol' },
         ];
         super.createFile(path, headers);
     }
