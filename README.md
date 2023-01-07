@@ -1,3 +1,10 @@
+this project is for produce an external service for a company that deals in the field of crypto, The goal is to work with the binance api, thereby tracking the data of candles by type of currency and save important data ,for each stream of transactions the information is saved in the Oracle cloud and in csv format.
+
+
+
+
+
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
 </p>
